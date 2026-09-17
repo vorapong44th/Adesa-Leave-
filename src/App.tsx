@@ -38,7 +38,7 @@ export default function App() {
     try { setError(''); await googleSignIn(); }
     catch (e: any) { setError(e.message || 'Google sign-in failed.'); }
   };
-  if (!identity || !profile || !identity.emailVerified) return (
+  if (!identity || !profile || profile.id !== identity.uid || !identity.emailVerified) return (
     <main className="min-h-screen flex items-center justify-center bg-slate-950 text-white p-6">
       <section className="max-w-md rounded-2xl border border-white/20 p-8 space-y-4">
         <h1 className="text-2xl font-bold">Adesa Leave</h1>
