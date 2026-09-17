@@ -1,43 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { User } from 'firebase/auth';
-import {
-  COMPANY_LEAVE_POLICY,
-  LeaveRequest,
-  PushNotification,
-  ThemeMode,
-  UserProfile,
-  WorkspaceConfig,
-  checkApprovalPermission,
-} from './types';
-import {
-  INITIAL_USERS,
-  loadActiveUserId,
-  loadSavedNotifications,
-  loadSavedRequests,
-  loadSavedUsers,
-  loadWorkspaceConfig,
-  saveActiveUserId,
-  saveNotifications,
-  saveRequests,
-  saveUsers,
-  saveWorkspaceConfig,
-} from './data/initialData';
-import {
-  getAccessToken,
-  googleSignIn,
-  initAuth,
-  logout,
-} from './services/firebaseAuth';
-import {
-  appendLeaveToSheet,
-  createGoogleCalendarEvent,
-  createYearlyLeaveSheet,
-} from './services/workspaceService';
-import {
-  broadcastPushNotification,
-  playNotificationChime,
-  subscribeToPushNotifications,
-} from './services/notificationService';
+import { LeaveRequest, PushNotification, ThemeMode, UserProfile, WorkspaceConfig } from './types';
+import { getAccessToken, googleSignIn, initAuth, logout } from './services/firebaseAuth';
+import { defaultWorkspace, subscribeProfile, subscribeWorkspace, submitLeave, decideLeave, saveSharedWorkspace, updateNotifications } from './services/leaveService';
+import { playNotificationChime, disablePushNotifications, requestPushPermission } from './services/notificationService';
 import { Header } from './components/Header';
 import { EmployeeDashboard } from './components/EmployeeDashboard';
 import { ManagerDashboard } from './components/ManagerDashboard';
@@ -48,450 +14,153 @@ import { WorkspaceSettingsModal } from './components/WorkspaceSettingsModal';
 import { TeamCalendarView } from './components/TeamCalendarView';
 import { ToastContainer, ToastMessage } from './components/Toast';
 
+
 export default function App() {
-  const [users, setUsers] = useState<UserProfile[]>(loadSavedUsers);
-  const [activeUserId, setActiveUserId] = useState<string>(loadActiveUserId);
-  const [requests, setRequests] = useState<LeaveRequest[]>(loadSavedRequests);
-  const [notifications, setNotifications] = useState<PushNotification[]>(loadSavedNotifications);
-  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig>(loadWorkspaceConfig);
-
-  // Theme Mode: defaults to 'light' (Executive Light), with 'warm' (Warm Sand) and 'dark' (Obsidian Dark) options
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    return (localStorage.getItem('adesa_leave_theme') as ThemeMode) || 'light';
-  });
-
+  const [identity, setIdentity] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => initAuth(user => { setIdentity(user); setLoading(false); }, () => {
+    setIdentity(null); setProfile(null); setLoading(false);
+  }), []);
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    document.body.setAttribute('data-theme', theme);
-    localStorage.setItem('adesa_leave_theme', theme);
-  }, [theme]);
+    setProfile(null); setError('');
+    if (!identity) return;
+    let active = true;
+    const stop = subscribeProfile(identity.uid, value => {
+      if (!active) return;
+      setProfile(value);
+      setError(value ? '' : 'Your account is not enabled. Ask your administrator to add your employee profile.');
+    }, () => { if (active) { setProfile(null); setError('Unable to load your employee profile. Check your connection and contact your administrator.'); } });
+    return () => { active = false; stop(); };
+  }, [identity?.uid]);
+  const signIn = async () => {
+    try { setError(''); await googleSignIn(); }
+    catch (e: any) { setError(e.message || 'Google sign-in failed.'); }
+  };
+  if (!identity || !profile || !identity.emailVerified) return (
+    <main className="min-h-screen flex items-center justify-center bg-slate-950 text-white p-6">
+      <section className="max-w-md rounded-2xl border border-white/20 p-8 space-y-4">
+        <h1 className="text-2xl font-bold">Adesa Leave</h1>
+        <p>{loading ? 'Loading…' : identity ? 'Waiting for an enabled, verified employee account.' : 'Sign in with your company Google account.'}</p>
+        {error && <p role="alert" className="text-amber-300">{error}</p>}
+        <button className="rounded-xl bg-indigo-600 px-5 py-3" onClick={signIn}>Sign in with Google</button>
+        {identity && <button className="ml-3 underline" onClick={() => logout()}>Sign out</button>}
+      </section>
+    </main>
+  );
+  return <LeaveApp key={identity.uid + profile.role + profile.department} identity={identity} profile={profile} />;
+}
 
-  // Google Workspace Auth State
-  const [googleUser, setGoogleUser] = useState<{
-    displayName: string | null;
-    email: string | null;
-    photoURL: string | null;
-  } | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(getAccessToken());
-
-  // Modals & Drawers
+function LeaveApp({ identity, profile }: { identity: User; profile: UserProfile }) {
+  const [users, setUsers] = useState<UserProfile[]>([profile]);
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [notifications, setNotifications] = useState<PushNotification[]>([]);
+  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig>(defaultWorkspace);
+  const [dataError, setDataError] = useState('');
+  const currentUser = users.find(u => u.id === identity.uid) || profile;
+  const googleUser = { displayName: identity.displayName, email: identity.email, photoURL: identity.photoURL };
+  const [accessToken, setAccessToken] = useState(getAccessToken());
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    try { return (localStorage.getItem('adesa_leave_theme') as ThemeMode) || 'light'; } catch { return 'light'; }
+  });
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
   const [reviewingRequest, setReviewingRequest] = useState<LeaveRequest | null>(null);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isCalendarViewOpen, setIsCalendarViewOpen] = useState(false);
-
-  // Sync state during approval
   const [isSyncingApproval, setIsSyncingApproval] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
-
-  // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  const addToast = (type: 'success' | 'info' | 'error' | 'push', title: string, message: string) => {
-    const id = 't-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-    setToasts((prev) => [...prev, { id, type, title, message }]);
-  };
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  // Find current active user
-  const currentUser = users.find((u) => u.id === activeUserId) || users[0];
-
-  // Initialize Firebase Auth listener
+  const pendingDecisions = useRef(new Set<string>());
+  const seenNotifications = useRef<Set<string> | null>(null);
+  const addToast = (type: ToastMessage['type'], title: string, message: string) =>
+    setToasts(prev => [...prev, { id: crypto.randomUUID(), type, title, message }]);
+  const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
   useEffect(() => {
-    const unsubscribe = initAuth(
-      (user: User, token: string) => {
-        setGoogleUser({
-          displayName: user.displayName,
-          email: user.email,
-          photoURL: user.photoURL,
-        });
-        setAccessToken(token);
-      },
-      () => {
-        setGoogleUser(null);
-        setAccessToken(null);
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    try { localStorage.setItem('adesa_leave_theme', theme); } catch {}
+  }, [theme]);
+  useEffect(() => subscribeWorkspace(profile, {
+    users: setUsers, requests: setRequests, config: setWorkspaceConfig,
+    notifications: incoming => {
+      if (seenNotifications.current) for (const n of incoming) {
+        if (!n.read && !seenNotifications.current.has(n.id)) {
+          addToast('push', n.title, n.message);
+          playNotificationChime();
+        }
       }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  // Listen to real-time push notifications across tabs/components
-  useEffect(() => {
-    const unsubscribe = subscribeToPushNotifications((incoming) => {
-      setNotifications((prev) => {
-        // Prevent duplicate
-        if (prev.some((n) => n.id === incoming.id)) return prev;
-        const updated = [incoming, ...prev];
-        saveNotifications(updated);
-        return updated;
-      });
-
-      // Show toast if relevant to current user role
-      if (incoming.targetRole === currentUser.role || incoming.employeeName === currentUser.name) {
-        addToast('push', incoming.title, incoming.message);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [currentUser.role, currentUser.name]);
-
-  // Handle switching persona/role
-  const handleSwitchUser = (user: UserProfile) => {
-    setActiveUserId(user.id);
-    saveActiveUserId(user.id);
-    addToast('info', 'Active Persona Switched', `Viewing as ${user.name} (${user.role.toUpperCase()})`);
-  };
-
-  // Google Sign In
+      seenNotifications.current = new Set(incoming.map(n => n.id));
+      setNotifications(incoming);
+    },
+    error: () => {
+      setRequests([]); setNotifications([]); setUsers([]);
+      setDataError('Shared records could not be loaded. Check your connection and account permissions, then reload.');
+    }
+  }), [profile.id, profile.role, profile.department]);
   const handleGoogleSignIn = async () => {
-    try {
-      const result = await googleSignIn();
-      if (result) {
-        setGoogleUser({
-          displayName: result.user.displayName,
-          email: result.user.email,
-          photoURL: result.user.photoURL,
-        });
-        setAccessToken(result.accessToken);
-        addToast(
-          'success',
-          'Google Account Connected',
-          'Ready to sync leaves with Google Calendar and Google Sheets.'
-        );
-      }
-    } catch (err: any) {
-      addToast('error', 'Google Sign-in Failed', err.message || 'Check popup blocker.');
-    }
+    try { const result = await googleSignIn(); setAccessToken(result.accessToken); addToast('success', 'Google connected', 'Ready to sync approved leave.'); }
+    catch (e: any) { addToast('error', 'Sign-in failed', e.message); }
   };
-
-  // Google Sign Out
   const handleGoogleSignOut = async () => {
-    await logout();
-    setGoogleUser(null);
-    setAccessToken(null);
-    addToast('info', 'Disconnected', 'Google Account disconnected.');
+    try { await disablePushNotifications(); await logout(); }
+    catch (e: any) { addToast('error', 'Sign-out failed', e.message); }
   };
-
-  // Save workspace config changes
-  const handleSaveWorkspaceConfig = (newConfig: WorkspaceConfig) => {
-    setWorkspaceConfig(newConfig);
-    saveWorkspaceConfig(newConfig);
+  const openSettings = () => {
+    if (['ceo', 'head_of_dept'].includes(currentUser.role)) setIsWorkspaceModalOpen(true);
+    else addToast('info', 'Workspace settings', 'A CEO or department head manages the shared integrations.');
   };
-
-  // Submit Leave Request (Employee action)
-  const handleSubmitLeaveRequest = (
-    newReqData: Omit<LeaveRequest, 'id' | 'submittedAt' | 'status'>
-  ) => {
-    const newId = `LV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
-    const newRequest: LeaveRequest = {
-      ...newReqData,
-      id: newId,
-      submittedAt: new Date().toISOString(),
-      status: 'Pending',
-    };
-
-    const updatedRequests = [newRequest, ...requests];
-    setRequests(updatedRequests);
-    saveRequests(updatedRequests);
-
-    // Instant push notification to manager
-    const pushNotification: PushNotification = {
-      id: `notif-${Date.now()}`,
-      title: `New Leave Request: ${newRequest.employeeName}`,
-      message: `${newRequest.employeeName} requested ${newRequest.totalDays} day(s) of ${newRequest.leaveType} (${newRequest.startDate} to ${newRequest.endDate}).`,
-      timestamp: new Date().toISOString(),
-      read: false,
-      requestId: newRequest.id,
-      type: 'leave_submitted',
-      targetRole: 'manager',
-      employeeName: newRequest.employeeName,
-    };
-
-    setNotifications((prev) => {
-      const updated = [pushNotification, ...prev];
-      saveNotifications(updated);
-      return updated;
-    });
-
-    broadcastPushNotification(pushNotification);
-
-    addToast(
-      'success',
-      'Leave Request Submitted',
-      `Your request for ${newRequest.totalDays} day(s) was sent to managers for instant review.`
-    );
+  const handleSaveWorkspaceConfig = async (config: WorkspaceConfig) => {
+    try { await saveSharedWorkspace(config); addToast('success', 'Settings saved', 'The shared workspace configuration has been updated.'); }
+    catch (e: any) { addToast('error', 'Settings not saved', e.message); throw e; }
   };
-
-  // Cancel Leave Request (Employee action)
-  const handleCancelRequest = (requestId: string) => {
-    const updated = requests.map((r) => (r.id === requestId ? { ...r, status: 'Cancelled' as const } : r));
-    setRequests(updated);
-    saveRequests(updated);
-    addToast('info', 'Request Cancelled', `Leave request #${requestId} was cancelled.`);
+  const handleSubmitLeaveRequest = async (data: Omit<LeaveRequest, 'id' | 'submittedAt' | 'status'>, id: string) => {
+    await submitLeave({ ...data, id });
+    addToast('success', 'Request submitted', 'Your request is saved and your authorized approvers have been notified.');
   };
-
-  // Approve Leave Request (Manager action -> Calendar + Sheets sync)
-  const handleApproveRequest = async (request: LeaveRequest, managerNote: string) => {
-    const applicant = users.find((u) => u.id === request.employeeId);
-    const perm = checkApprovalPermission(currentUser, request, applicant);
-    if (!perm.canApprove) {
-      addToast('error', 'Approval Restricted', perm.reason || 'You are not authorized to approve this request.');
-      return;
-    }
-
-    setIsSyncingApproval(true);
-    setSyncProgress('Authorizing approval and preparing Google Workspace sync...');
-
-    let calEventId: string | undefined = undefined;
-    let calEventLink: string | undefined = undefined;
-    let sheetRowAppended = false;
-    let currentConfig = { ...workspaceConfig };
-
+  const handleCancelRequest = async (id: string) => {
+    try { await decideLeave(id, 'Cancelled'); addToast('info', 'Request cancelled', 'Your pending request was cancelled.'); }
+    catch (e: any) { addToast('error', 'Cancellation failed', e.message); }
+  };
+  const decide = async (request: LeaveRequest, status: 'Approved' | 'Rejected', note: string) => {
+    if (pendingDecisions.current.has(request.id)) throw new Error('This request is already being processed.');
+    pendingDecisions.current.add(request.id);
+    setIsSyncingApproval(true); setSyncProgress('Saving decision and checking Google sync…');
     try {
-      const currentToken = accessToken || getAccessToken();
-
-      // 1. Google Calendar Sync
-      if (currentConfig.autoSyncCalendar && currentToken) {
-        setSyncProgress('Creating event on Google Calendar...');
-        try {
-          const calResult = await createGoogleCalendarEvent(request, currentUser.name, currentToken);
-          calEventId = calResult.eventId;
-          calEventLink = calResult.htmlLink;
-        } catch (calErr: any) {
-          console.warn('Google Calendar sync failed:', calErr);
-          addToast('error', 'Calendar Sync Warning', calErr.message || 'Could not post to Google Calendar.');
-        }
-      }
-
-      // 2. Google Sheets Yearly Record Sync
-      if (currentConfig.autoSyncSheets && currentToken) {
-        setSyncProgress('Recording leave row in yearly Google Sheet...');
-        try {
-          let sheetId = currentConfig.sheetId;
-          let sheetName = currentConfig.sheetName || 'Leave Records';
-
-          // If no sheet created yet, create one on the fly!
-          if (!sheetId) {
-            setSyncProgress('Initializing yearly Google Sheet "Company Leave Tracker"...');
-            const newSheet = await createYearlyLeaveSheet(currentToken);
-            sheetId = newSheet.spreadsheetId;
-            sheetName = newSheet.sheetName;
-            currentConfig = {
-              ...currentConfig,
-              sheetId: newSheet.spreadsheetId,
-              sheetUrl: newSheet.spreadsheetUrl,
-              sheetName: newSheet.sheetName,
-            };
-            setWorkspaceConfig(currentConfig);
-            saveWorkspaceConfig(currentConfig);
-          }
-
-          await appendLeaveToSheet(
-            sheetId,
-            sheetName,
-            request,
-            currentUser.name,
-            calEventLink || 'N/A',
-            currentToken
-          );
-          sheetRowAppended = true;
-        } catch (sheetErr: any) {
-          console.warn('Google Sheets append failed:', sheetErr);
-          addToast('error', 'Google Sheets Warning', sheetErr.message || 'Could not append to Google Sheet.');
-        }
-      }
-
-      // Update Request status
-      const updatedRequests = requests.map((r) => {
-        if (r.id === request.id) {
-          return {
-            ...r,
-            status: 'Approved' as const,
-            decisionAt: new Date().toISOString(),
-            decisionBy: currentUser.name,
-            managerNote: managerNote.trim() || undefined,
-            calendarEventId: calEventId,
-            calendarEventLink: calEventLink,
-            sheetRowAppended,
-          };
-        }
-        return r;
-      });
-
-      setRequests(updatedRequests);
-      saveRequests(updatedRequests);
-
-      // Deduct employee leave balance
-      setUsers((prevUsers) => {
-        const nextUsers = prevUsers.map((u) => {
-          if (u.id === request.employeeId) {
-            const defaultAllocated = COMPANY_LEAVE_POLICY[request.leaveType]?.allocated ?? 0;
-            const currentBal = u.balances[request.leaveType] || { allocated: defaultAllocated, used: 0 };
-            return {
-              ...u,
-              balances: {
-                ...u.balances,
-                [request.leaveType]: {
-                  ...currentBal,
-                  allocated: currentBal.allocated || defaultAllocated,
-                  used: currentBal.used + request.totalDays,
-                },
-              },
-            };
-          }
-          return u;
-        });
-        saveUsers(nextUsers);
-        return nextUsers;
-      });
-
-      // Broadcast push notification to employee
-      const pushNotification: PushNotification = {
-        id: `notif-${Date.now()}`,
-        title: `Leave Request Approved!`,
-        message: `Your ${request.leaveType} (${request.startDate} to ${request.endDate}) was approved by ${currentUser.name}.${
-          calEventLink ? ' Recorded in Google Calendar.' : ''
-        }`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        requestId: request.id,
-        type: 'leave_approved',
-        targetRole: 'employee',
-        employeeName: request.employeeName,
-      };
-
-      setNotifications((prev) => {
-        const updated = [pushNotification, ...prev];
-        saveNotifications(updated);
-        return updated;
-      });
-
-      broadcastPushNotification(pushNotification);
-
-      addToast(
-        'success',
-        'Leave Approved & Synced',
-        `Approved ${request.employeeName}'s leave.${
-          calEventLink ? ' Google Calendar event created.' : ''
-        }${sheetRowAppended ? ' Google Sheet row logged.' : ''}`
-      );
-    } finally {
-      setIsSyncingApproval(false);
-      setSyncProgress(null);
-    }
+      const result = await decideLeave(request.id, status, note, getAccessToken());
+      const states = result.sync ? Object.values(result.sync) : [];
+      const incomplete = states.some(s => !['synced', 'disabled'].includes(s));
+      addToast(incomplete ? 'info' : 'success', status === 'Approved' ? 'Leave approved' : 'Leave declined',
+        incomplete ? 'Decision saved. Google sync needs attention; open this record to view its status.' :
+        states.includes('synced') ? 'Decision saved and enabled Google integrations synced.' : 'Decision saved.');
+    } catch (e: any) {
+      addToast('error', 'Check request status', e.message + ' Shared records show the saved decision; do not reapprove to retry sync.');
+      throw e;
+    } finally { pendingDecisions.current.delete(request.id); setIsSyncingApproval(pendingDecisions.current.size > 0); setSyncProgress(null); }
   };
-
-  // Reject Leave Request (Manager action)
-  const handleRejectRequest = async (request: LeaveRequest, managerNote: string) => {
-    const applicant = users.find((u) => u.id === request.employeeId);
-    const perm = checkApprovalPermission(currentUser, request, applicant);
-    if (!perm.canApprove) {
-      addToast('error', 'Action Restricted', perm.reason || 'You are not authorized to decline this request.');
-      return;
-    }
-
-    const updatedRequests = requests.map((r) => {
-      if (r.id === request.id) {
-        return {
-          ...r,
-          status: 'Rejected' as const,
-          decisionAt: new Date().toISOString(),
-          decisionBy: currentUser.name,
-          managerNote: managerNote.trim(),
-        };
-      }
-      return r;
-    });
-
-    setRequests(updatedRequests);
-    saveRequests(updatedRequests);
-
-    // Broadcast push notification to employee
-    const pushNotification: PushNotification = {
-      id: `notif-${Date.now()}`,
-      title: `Leave Request Declined`,
-      message: `Your ${request.leaveType} (${request.startDate} to ${request.endDate}) was declined by ${currentUser.name}: "${managerNote}".`,
-      timestamp: new Date().toISOString(),
-      read: false,
-      requestId: request.id,
-      type: 'leave_rejected',
-      targetRole: 'employee',
-      employeeName: request.employeeName,
-    };
-
-    setNotifications((prev) => {
-      const updated = [pushNotification, ...prev];
-      saveNotifications(updated);
-      return updated;
-    });
-
-    broadcastPushNotification(pushNotification);
-
-    addToast('info', 'Request Declined', `Leave request #${request.id} was rejected.`);
-  };
-
-  // Quick review modal trigger
-  const handleOpenReview = (request: LeaveRequest) => {
-    setReviewingRequest(request);
-    setIsApprovalModalOpen(true);
-  };
-
-  // Quick Approve directly from table/card
-  const handleQuickApprove = (request: LeaveRequest) => {
-    handleApproveRequest(request, 'Approved via Quick Review.');
-  };
-
-  // Quick Reject directly from table/card
-  const handleQuickReject = (request: LeaveRequest) => {
-    handleOpenReview(request);
-  };
-
-  // Notification actions
+  const handleApproveRequest = (request: LeaveRequest, note: string) => decide(request, 'Approved', note);
+  const handleRejectRequest = (request: LeaveRequest, note: string) => decide(request, 'Rejected', note);
+  const handleOpenReview = (request: LeaveRequest) => { setReviewingRequest(request); setIsApprovalModalOpen(true); };
+  const handleQuickApprove = (request: LeaveRequest) => { void handleApproveRequest(request, 'Approved via Quick Review.').catch(() => {}); };
+  const handleQuickReject = handleOpenReview;
   const handleMarkAllNotificationsRead = () => {
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    setNotifications(updated);
-    saveNotifications(updated);
+    void updateNotifications(identity.uid, notifications).catch(e => addToast('error', 'Unable to update notifications', e.message));
   };
-
   const handleClearNotifications = () => {
-    setNotifications([]);
-    saveNotifications([]);
+    void updateNotifications(identity.uid, notifications, true).catch(e => addToast('error', 'Unable to clear notifications', e.message));
   };
-
-  const handleSelectNotification = (requestId: string) => {
-    const target = requests.find((r) => r.id === requestId);
-    if (target) {
-      if (currentUser.role === 'manager' && target.status === 'Pending') {
-        handleOpenReview(target);
-      }
-    }
+  const handleSelectNotification = (id: string) => {
+    const request = requests.find(r => r.id === id);
+    if (request) handleOpenReview(request);
   };
-
-  // Test push simulation
   const handleTestPushSimulation = () => {
-    playNotificationChime();
-    const testNotif: PushNotification = {
-      id: `notif-test-${Date.now()}`,
-      title: 'Simulated Push Alert: Urgent Time-Off',
-      message: 'Alex Rivera requested 2 days of Personal Leave (Next Tuesday - Wednesday).',
-      timestamp: new Date().toISOString(),
-      read: false,
-      requestId: requests[0]?.id || 'LV-2026-089',
-      type: 'leave_submitted',
-      targetRole: 'manager',
-      employeeName: 'Alex Rivera',
-    };
-    broadcastPushNotification(testNotif);
-    addToast('push', testNotif.title, testNotif.message);
+    void requestPushPermission().then(() => addToast('info', 'Notifications enabled', 'This device is registered for leave updates.'))
+      .catch(e => addToast('error', 'Notifications unavailable', e.message));
   };
-
-  const unreadNotificationCount = notifications.filter((n) => !n.read).length;
-
+  const unreadNotificationCount = notifications.filter(n => !n.read).length;
+  if (dataError) return <main className="p-8"><p role="alert">{dataError}</p><button onClick={() => window.location.reload()}>Reload</button></main>;
   return (
     <div
       data-theme={theme}
@@ -519,15 +188,13 @@ export default function App() {
       {/* App Navigation Header */}
       <Header
         currentUser={currentUser}
-        allUsers={users}
-        onSwitchUser={handleSwitchUser}
         googleUser={googleUser}
         onGoogleSignIn={handleGoogleSignIn}
         onGoogleSignOut={handleGoogleSignOut}
         unreadCount={unreadNotificationCount}
         onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
         workspaceConfig={workspaceConfig}
-        onOpenWorkspaceSettings={() => setIsWorkspaceModalOpen(true)}
+        onOpenWorkspaceSettings={openSettings}
         theme={theme}
         onToggleTheme={setTheme}
       />
@@ -548,7 +215,7 @@ export default function App() {
             requests={requests}
             allUsers={users}
             workspaceConfig={workspaceConfig}
-            onOpenWorkspaceSettings={() => setIsWorkspaceModalOpen(true)}
+            onOpenWorkspaceSettings={openSettings}
             onReviewRequest={handleOpenReview}
             onQuickApprove={handleQuickApprove}
             onQuickReject={handleQuickReject}
@@ -571,7 +238,7 @@ export default function App() {
           </p>
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => setIsWorkspaceModalOpen(true)}
+              onClick={openSettings}
               className="text-stone-600 dark:text-stone-300 hover:text-indigo-600 dark:hover:text-white underline underline-offset-2 transition-colors"
             >
               Workspace Settings
@@ -602,7 +269,7 @@ export default function App() {
           setIsApprovalModalOpen(false);
           setReviewingRequest(null);
         }}
-        request={reviewingRequest}
+        request={requests.find(r => r.id === reviewingRequest?.id) || null}
         allRequests={requests}
         currentUser={currentUser}
         allUsers={users}
@@ -623,7 +290,7 @@ export default function App() {
       />
 
       <WorkspaceSettingsModal
-        isOpen={isWorkspaceModalOpen}
+        isOpen={isWorkspaceModalOpen && ['ceo', 'head_of_dept'].includes(currentUser.role)}
         onClose={() => setIsWorkspaceModalOpen(false)}
         config={workspaceConfig}
         onSaveConfig={handleSaveWorkspaceConfig}
