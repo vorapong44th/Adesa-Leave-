@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Calendar as CalendarIcon,
   CheckCircle2,
@@ -41,6 +41,15 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
+
+  useEffect(() => {
+    if (isOpen) {
+      setCalendarIdInput(config.calendarId || 'primary');
+      setSheetIdInput(config.sheetId || '');
+      setSheetNameInput(config.sheetName || 'Leave Records');
+      setStatusMessage(null);
+    }
+  }, [isOpen, config.calendarId, config.sheetId, config.sheetName]);
 
   const saveToggle = (next: WorkspaceConfig) => {
     void onSaveConfig(next).catch((e: any) => setStatusMessage({ type: 'error', text: e.message || 'Settings could not be saved.' }));
