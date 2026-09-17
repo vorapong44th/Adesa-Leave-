@@ -1,0 +1,15 @@
+/* Generated from firebase-applet-config.json. Keep the public config in sync when changing projects. */
+importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging-compat.js');
+firebase.initializeApp({
+  "projectId": "gen-lang-client-0618330436",
+  "appId": "1:247365868430:web:776e0979cd1fb8ef5262df",
+  "apiKey": "AIzaSyASYU0R4jodb9NtdtwikhVizGbFWbpKw6k",
+  "authDomain": "gen-lang-client-0618330436.firebaseapp.com",
+  "storageBucket": "gen-lang-client-0618330436.firebasestorage.app",
+  "messagingSenderId": "247365868430",
+  "measurementId": "",
+  "oAuthClientId": "247365868430-q6n8lj7hclnsg67o8r030037jck2nf80.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+});
+firebase.messaging();
