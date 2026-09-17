@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Calendar as CalendarIcon,
@@ -73,6 +73,10 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
   const [handoverPerson, setHandoverPerson] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) { setSubmissionId(crypto.randomUUID()); setErrorMsg(null); }
+  }, [isOpen]);
 
   // Auto calculate total working days
   const totalDays = useMemo(() => {
