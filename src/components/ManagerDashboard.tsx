@@ -75,7 +75,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   // Vorapong sees Global Trade department requests
   const visibleRequests = requests.filter((r) => {
     if (isCeo) return true;
-    if (isHeadOfDept) return r.employeeDepartment === 'Global Trade';
+    if (isHeadOfDept) return r.employeeDepartment === currentUser.department;
     return true;
   });
 
@@ -170,7 +170,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               </button>
             )}
 
-            {/* Test Push Simulation */}
+            {/* Device Notifications */}
             <button
               onClick={() => {
                 playNotificationChime();
@@ -180,7 +180,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               title="Test instant push notification sound and visual alert"
             >
               <Bell className="w-3.5 h-3.5 text-amber-400" />
-              <span>Test Push</span>
+              <span>Enable Notifications</span>
             </button>
 
             {/* Team Calendar */}
