@@ -17,7 +17,7 @@ interface LeaveRequestModalProps {
   onClose: () => void;
   currentUser: UserProfile;
   allRequests: LeaveRequest[];
-  onSubmitRequest: (newRequest: Omit<LeaveRequest, 'id' | 'submittedAt' | 'status'>) => void;
+  onSubmitRequest: (newRequest: Omit<LeaveRequest, 'id' | 'submittedAt' | 'status'>, id: string) => Promise<void>;
 }
 
 const LEAVE_TYPES: { type: LeaveType; description: string; quota: string }[] = [
@@ -62,6 +62,8 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
     return d.toISOString().split('T')[0];
   }, []);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionId, setSubmissionId] = useState(() => crypto.randomUUID());
   const [leaveType, setLeaveType] = useState<LeaveType>('Annual Leave');
   const [startDate, setStartDate] = useState(defaultDate);
   const [endDate, setEndDate] = useState(defaultDate);
@@ -94,7 +96,8 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    if (isSubmitting) { e.preventDefault(); return; }
     e.preventDefault();
     setErrorMsg(null);
 
@@ -118,7 +121,9 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
       return;
     }
 
-    onSubmitRequest({
+    setIsSubmitting(true);
+    try {
+    await onSubmitRequest({
       employeeId: currentUser.id,
       employeeName: currentUser.name,
       employeeEmail: currentUser.email,
@@ -133,9 +138,12 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
       reason: reason.trim(),
       handoverPerson: handoverPerson.trim() || undefined,
       emergencyPhone: emergencyPhone.trim() || undefined,
-    });
-
+    }, submissionId);
+    setSubmissionId(crypto.randomUUID());
+    setReason('');
     onClose();
+    } catch (e: any) { setErrorMsg(e.message || 'Request could not be saved. Try again.'); }
+    finally { setIsSubmitting(false); }
   };
 
   return (
@@ -380,10 +388,11 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-teal-500 hover:from-indigo-600 hover:to-teal-600 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-lg shadow-indigo-500/20 transition-all"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Submit Request</span>
+              <span>{isSubmitting ? 'Saving…' : 'Submit Request'}</span>
             </button>
           </div>
         </form>
