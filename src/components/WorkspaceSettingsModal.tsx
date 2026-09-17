@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Calendar as CalendarIcon,
   CheckCircle2,
@@ -18,7 +18,7 @@ interface WorkspaceSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: WorkspaceConfig;
-  onSaveConfig: (newConfig: WorkspaceConfig) => void;
+  onSaveConfig: (newConfig: WorkspaceConfig) => Promise<void>;
   googleUser: { displayName: string | null; email: string | null } | null;
   accessToken: string | null;
   onGoogleSignIn: () => void;
@@ -33,6 +33,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
   accessToken,
   onGoogleSignIn,
 }) => {
+  const [calendarIdInput, setCalendarIdInput] = useState(config.calendarId || 'primary');
   const [sheetIdInput, setSheetIdInput] = useState(config.sheetId || '');
   const [sheetNameInput, setSheetNameInput] = useState(config.sheetName || 'Leave Records');
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
@@ -41,6 +42,18 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
     null
   );
 
+  useEffect(() => {
+    if (isOpen) {
+      setCalendarIdInput(config.calendarId || 'primary');
+      setSheetIdInput(config.sheetId || '');
+      setSheetNameInput(config.sheetName || 'Leave Records');
+      setStatusMessage(null);
+    }
+  }, [isOpen, config.calendarId, config.sheetId, config.sheetName]);
+
+  const saveToggle = (next: WorkspaceConfig) => {
+    void onSaveConfig(next).catch((e: any) => setStatusMessage({ type: 'error', text: e.message || 'Settings could not be saved.' }));
+  };
   if (!isOpen) return null;
 
   const handleCreateNewSheet = async () => {
@@ -64,7 +77,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
       };
       setSheetIdInput(result.spreadsheetId);
       setSheetNameInput(result.sheetName);
-      onSaveConfig(newConfig);
+      await onSaveConfig(newConfig);
       setStatusMessage({
         type: 'success',
         text: `Created new spreadsheet: "Company Leave Tracker - ${new Date().getFullYear()}". Approved leaves will now log here!`,
@@ -111,7 +124,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
         sheetUrl: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
         sheetName: details.firstSheetName || sheetNameInput,
       };
-      onSaveConfig(newConfig);
+      await onSaveConfig(newConfig);
       setStatusMessage({
         type: 'success',
         text: `Verified access to "${details.title}" (Tab: ${details.firstSheetName})`,
@@ -209,7 +222,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
               </div>
             </div>
 
-            {!googleUser && (
+            {(!googleUser || !accessToken) && (
               <button
                 onClick={onGoogleSignIn}
                 className="gsi-material-button text-xs py-1.5 px-3"
@@ -231,7 +244,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                   type="checkbox"
                   checked={config.autoSyncCalendar}
                   onChange={(e) =>
-                    onSaveConfig({ ...config, autoSyncCalendar: e.target.checked })
+                    saveToggle({ ...config, autoSyncCalendar: e.target.checked })
                   }
                   className="sr-only peer"
                 />
@@ -239,12 +252,15 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
               </label>
             </div>
             <p className="text-xs text-stone-300 leading-relaxed bg-white/5 p-3.5 rounded-2xl border border-white/10">
-              When a manager approves a leave request, an all-day event is automatically created on
-              the manager&apos;s primary Google Calendar with employee details, out-of-office block, and
-              direct review links.
+              When enabled, approval attempts to create an event on the configured calendar. Full days use all-day events; morning and afternoon leave use Bangkok office hours. Failed sync is shown on the leave record.
             </p>
           </div>
 
+          <label className="block text-xs text-stone-300">
+            Calendar ID (use a shared calendar for team visibility)
+            <input className="block w-full p-2 mt-1 rounded bg-white/10" value={calendarIdInput} onChange={e => setCalendarIdInput(e.target.value)} />
+            <button className="mt-2 underline" onClick={() => saveToggle({ ...config, calendarId: calendarIdInput.trim() || 'primary' })}>Save calendar</button>
+          </label>
           {/* Google Sheets Section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -259,7 +275,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                   type="checkbox"
                   checked={config.autoSyncSheets}
                   onChange={(e) =>
-                    onSaveConfig({ ...config, autoSyncSheets: e.target.checked })
+                    saveToggle({ ...config, autoSyncSheets: e.target.checked })
                   }
                   className="sr-only peer"
                 />
@@ -298,7 +314,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                   <span className="text-stone-400">Tab name: {config.sheetName}</span>
                   <button
                     onClick={() => {
-                      onSaveConfig({ ...config, sheetId: '', sheetUrl: '' });
+                      saveToggle({ ...config, sheetId: '', sheetUrl: '' });
                       setSheetIdInput('');
                     }}
                     className="text-stone-400 hover:text-rose-400 text-[11px] transition-colors"

@@ -89,7 +89,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
               title="Trigger a simulated instant push notification with chime"
             >
               <Play className="w-3 h-3 fill-current" />
-              <span>Test Push Chime</span>
+              <span>Enable Notifications Chime</span>
             </button>
           </div>
 

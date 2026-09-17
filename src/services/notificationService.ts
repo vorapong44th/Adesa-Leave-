@@ -1,5 +1,7 @@
-import { PushNotification } from '../types';
-
+import { getMessaging, getToken, deleteToken, isSupported } from 'firebase/messaging';
+import { app } from './firebaseAuth';
+import { registerPushToken } from './leaveService';
+let deviceToken: string | null = null;
 let audioCtx: AudioContext | null = null;
 
 /**
@@ -50,101 +52,24 @@ export function playNotificationChime() {
   }
 }
 
-/**
- * Requests native browser push notification permission.
- */
+
 export async function requestPushPermission(): Promise<NotificationPermission> {
-  if (!('Notification' in window)) {
-    return 'denied';
-  }
-  try {
-    return await Notification.requestPermission();
-  } catch {
-    return 'default';
-  }
+  if (!await isSupported()) throw new Error('This browser does not support device notifications. In-app updates remain available.');
+  const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+  if (!vapidKey) throw new Error('Device push is not configured yet. In-app updates remain available.');
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('Allow notifications in your browser settings to receive device alerts.');
+  const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+  await navigator.serviceWorker.ready;
+  deviceToken = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration: registration });
+  if (!deviceToken) throw new Error('Unable to register this device. Please try again.');
+  await registerPushToken(deviceToken);
+  return permission;
 }
-
-/**
- * Sends an instant push notification via browser Notification API.
- */
-export function triggerSystemPush(title: string, body: string, onClickUrl?: string) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      const notif = new Notification(title, {
-        body,
-        icon: 'https://cdn-icons-png.flaticon.com/512/3652/3652191.png',
-        tag: 'leave-notification',
-      });
-      if (onClickUrl) {
-        notif.onclick = () => {
-          window.focus();
-          notif.close();
-        };
-      }
-    } catch (e) {
-      console.debug('System notification error:', e);
-    }
-  }
-}
-
-// Cross-tab broadcast channel for instant multi-user simulation
-const channelName = 'leave_notifications_bus';
-let broadcastChannel: BroadcastChannel | null = null;
-try {
-  if (typeof BroadcastChannel !== 'undefined') {
-    broadcastChannel = new BroadcastChannel(channelName);
-  }
-} catch {
-  broadcastChannel = null;
-}
-
-export function broadcastPushNotification(notification: PushNotification) {
-  playNotificationChime();
-  triggerSystemPush(notification.title, notification.message);
-
-  if (broadcastChannel) {
-    try {
-      broadcastChannel.postMessage(notification);
-    } catch (err) {
-      console.debug('Broadcast postMessage failed:', err);
-    }
-  }
-
-  // Fallback via localStorage event for across tabs
-  try {
-    localStorage.setItem('leave_latest_push', JSON.stringify({ ...notification, _nonce: Date.now() }));
-  } catch {
-    // ignore
-  }
-}
-
-export function subscribeToPushNotifications(callback: (notification: PushNotification) => void) {
-  const handler = (event: MessageEvent) => {
-    if (event.data && event.data.id) {
-      callback(event.data as PushNotification);
-    }
-  };
-
-  if (broadcastChannel) {
-    broadcastChannel.addEventListener('message', handler);
-  }
-
-  const storageHandler = (e: StorageEvent) => {
-    if (e.key === 'leave_latest_push' && e.newValue) {
-      try {
-        const parsed = JSON.parse(e.newValue);
-        callback(parsed as PushNotification);
-      } catch {
-        // ignore
-      }
-    }
-  };
-  window.addEventListener('storage', storageHandler);
-
-  return () => {
-    if (broadcastChannel) {
-      broadcastChannel.removeEventListener('message', handler);
-    }
-    window.removeEventListener('storage', storageHandler);
-  };
+export async function disablePushNotifications() {
+  if (!await isSupported()) return;
+  // Deleting the FCM subscription also invalidates tokens left after a page refresh.
+  if (deviceToken) await registerPushToken(deviceToken, true).catch(() => {});
+  await deleteToken(getMessaging(app));
+  deviceToken = null;
 }

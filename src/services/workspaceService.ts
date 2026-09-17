@@ -1,14 +1,5 @@
+import { calendarDates } from '../../functions/core.js';
 import { LeaveRequest } from '../types';
-
-/**
- * Calculates the exclusive end date required by Google Calendar for all-day events.
- * e.g., if end date is 2026-09-12, the exclusive end date is 2026-09-13.
- */
-function getExclusiveEndDate(dateString: string): string {
-  const date = new Date(dateString + 'T00:00:00');
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().split('T')[0];
-}
 
 /**
  * Creates an event on the user's primary Google Calendar for an approved leave.
@@ -18,7 +9,7 @@ export async function createGoogleCalendarEvent(
   managerName: string,
   accessToken: string
 ): Promise<{ eventId: string; htmlLink: string }> {
-  const exclusiveEnd = getExclusiveEndDate(request.endDate);
+
 
   const eventPayload = {
     summary: `🌴 Leave: ${request.employeeName} (${request.leaveType})`,
@@ -32,12 +23,7 @@ export async function createGoogleCalendarEvent(
       `• Approved By: ${managerName}`,
       `• Request ID: ${request.id}`,
     ].join('\n'),
-    start: {
-      date: request.startDate,
-    },
-    end: {
-      date: exclusiveEnd,
-    },
+    ...calendarDates(request),
     transparency: 'opaque', // Blocks out time on calendar
     reminders: {
       useDefault: false,
@@ -170,10 +156,10 @@ export async function appendLeaveToSheet(
     calendarLink || 'N/A',
   ];
 
-  const range = `${sheetName}!A:L`;
+  const range = `'${sheetName.replaceAll("'", "''")}'!A:L`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
     range
-  )}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  )}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
 
   const response = await fetch(url, {
     method: 'POST',
