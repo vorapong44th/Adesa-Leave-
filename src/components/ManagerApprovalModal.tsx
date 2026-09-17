@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Calendar as CalendarIcon,
@@ -46,6 +46,10 @@ export const ManagerApprovalModal: React.FC<ManagerApprovalModalProps> = ({
   const [managerNote, setManagerNote] = useState('');
   const [rejectMode, setRejectMode] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) { setManagerNote(''); setRejectMode(false); setErrorMsg(null); }
+  }, [isOpen, request?.id]);
 
   if (!isOpen || !request) return null;
 
