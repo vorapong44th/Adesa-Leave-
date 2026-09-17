@@ -1,25 +1,11 @@
+import { workingDays } from '../../functions/core.js';
 /**
  * Calculates number of business/working days between two dates (excluding Saturday and Sunday).
  */
 export function calculateWorkingDays(startDateStr: string, endDateStr: string, isHalfDay = false): number {
   if (!startDateStr || !endDateStr) return 0;
-  if (isHalfDay) return 0.5;
-
-  const start = new Date(startDateStr + 'T00:00:00');
-  const end = new Date(endDateStr + 'T00:00:00');
-
-  if (start > end) return 0;
-
-  let count = 0;
-  const cur = new Date(start);
-  while (cur <= end) {
-    const dayOfWeek = cur.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      count++;
-    }
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
+  try { return workingDays(startDateStr, isHalfDay ? startDateStr : endDateStr, isHalfDay); }
+  catch { return 0; }
 }
 
 /**
