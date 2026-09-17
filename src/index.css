@@ -1,0 +1,372 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="light"] {
+  --bg-app: #f8fafc;
+  --bg-card: rgba(255, 255, 255, 0.88);
+  --bg-card-subtle: #f1f5f9;
+  --bg-card-hover: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.85);
+  --border-app: #e2e8f0;
+  --border-card: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+  --text-faint: #94a3b8;
+  --modal-bg: #ffffff;
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --dropdown-bg: #ffffff;
+  --dropdown-border: #e2e8f0;
+  --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  --orb-1: rgba(99, 102, 241, 0.1);
+  --orb-2: rgba(20, 184, 166, 0.08);
+  --orb-3: rgba(168, 85, 247, 0.06);
+  --orb-4: rgba(59, 130, 246, 0.06);
+  --scrollbar-thumb: rgba(15, 23, 42, 0.15);
+  --scrollbar-thumb-hover: rgba(15, 23, 42, 0.28);
+}
+
+[data-theme="warm"] {
+  --bg-app: #faf7f2;
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-card-subtle: #f4f0e8;
+  --bg-card-hover: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.88);
+  --border-app: #e7e2d8;
+  --border-card: #e5e0d4;
+  --border-subtle: #ede8df;
+  --text-main: #1c1917;
+  --text-muted: #57534e;
+  --text-subtle: #78716c;
+  --text-faint: #a8a29e;
+  --modal-bg: #ffffff;
+  --input-bg: #ffffff;
+  --input-border: #d6d3d1;
+  --dropdown-bg: #ffffff;
+  --dropdown-border: #e7e2d8;
+  --shadow-card: 0 4px 20px -2px rgba(41, 37, 36, 0.04), 0 2px 6px -1px rgba(41, 37, 36, 0.02);
+  --orb-1: rgba(245, 158, 11, 0.1);
+  --orb-2: rgba(20, 184, 166, 0.07);
+  --orb-3: rgba(217, 119, 6, 0.05);
+  --orb-4: rgba(180, 83, 9, 0.05);
+  --scrollbar-thumb: rgba(41, 37, 36, 0.15);
+  --scrollbar-thumb-hover: rgba(41, 37, 36, 0.28);
+}
+
+[data-theme="dark"] {
+  --bg-app: #0c0e14;
+  --bg-card: rgba(255, 255, 255, 0.05);
+  --bg-card-subtle: rgba(255, 255, 255, 0.03);
+  --bg-card-hover: rgba(255, 255, 255, 0.08);
+  --bg-header: rgba(12, 14, 20, 0.85);
+  --border-app: rgba(255, 255, 255, 0.1);
+  --border-card: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-subtle: #94a3b8;
+  --text-faint: #64748b;
+  --modal-bg: #10131c;
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(255, 255, 255, 0.15);
+  --dropdown-bg: #0c0e14;
+  --dropdown-border: rgba(255, 255, 255, 0.15);
+  --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  --orb-1: rgba(99, 102, 241, 0.25);
+  --orb-2: rgba(20, 184, 166, 0.2);
+  --orb-3: rgba(168, 85, 247, 0.15);
+  --orb-4: rgba(59, 130, 246, 0.1);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Multi-Theme Adaptations for Light & Warm modes                             */
+/* -------------------------------------------------------------------------- */
+
+[data-theme="light"],
+[data-theme="warm"] {
+  /* Cards & Surface Containers */
+  .bg-white\/5 {
+    background-color: var(--bg-card) !important;
+    box-shadow: var(--shadow-card);
+  }
+  .bg-white\/\[0\.02\],
+  .bg-white\/\[0\.03\],
+  .bg-white\/\[0\.04\] {
+    background-color: var(--bg-card-subtle) !important;
+  }
+  .bg-white\/10 {
+    background-color: var(--border-app) !important;
+  }
+
+  /* Hover states */
+  .hover\:bg-white\/10:hover,
+  .hover\:bg-white\/\[0\.04\]:hover,
+  .hover\:bg-white\/5:hover {
+    background-color: var(--bg-card-hover) !important;
+  }
+
+  /* Borders */
+  .border-white\/10,
+  .border-white\/5,
+  .border-white\/20 {
+    border-color: var(--border-card) !important;
+  }
+
+  /* Modals, drawers, and surface panels */
+  [class*="bg-[#10131c]"],
+  [class*="bg-[#0c0e14]"],
+  .bg-\[\#10131c\],
+  .bg-\[\#0c0e14\] {
+    background-color: var(--modal-bg) !important;
+    border-color: var(--border-card) !important;
+    color: var(--text-main) !important;
+  }
+
+  /* Modal backdrops in light and warm modes */
+  .bg-black\/70,
+  .bg-black\/60 {
+    background-color: rgba(15, 23, 42, 0.45) !important;
+  }
+
+  /* Table row hover */
+  tr:hover td {
+    background-color: var(--bg-card-subtle) !important;
+  }
+
+  /* Select options */
+  option {
+    background-color: var(--modal-bg);
+    color: var(--text-main);
+  }
+
+  /* Action buttons with white/5 */
+  button.bg-white\/5,
+  button[class*="bg-white/5"] {
+    background-color: var(--bg-card) !important;
+    border-color: var(--border-card) !important;
+    color: var(--text-main) !important;
+  }
+  button.bg-white\/5:hover,
+  button[class*="bg-white/5"]:hover {
+    background-color: var(--bg-card-hover) !important;
+    border-color: #94a3b8 !important;
+    color: var(--text-main) !important;
+  }
+
+  /* Inputs, selects, and textareas */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-main) !important;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-faint) !important;
+  }
+
+  /* General Text */
+  .text-white:not([class*="bg-indigo-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-teal-"]):not([class*="from-"]) {
+    color: var(--text-main) !important;
+  }
+  .text-stone-200 {
+    color: var(--text-main) !important;
+  }
+  .text-stone-300 {
+    color: var(--text-muted) !important;
+  }
+  .text-stone-400 {
+    color: var(--text-subtle) !important;
+  }
+  .text-stone-500 {
+    color: var(--text-faint) !important;
+  }
+
+  /* Table Headers */
+  thead {
+    background-color: var(--bg-card-subtle) !important;
+    border-color: var(--border-card) !important;
+  }
+  thead th {
+    color: var(--text-muted) !important;
+  }
+
+  /* Subdued colored badge text adjustments for crisp readability on light cards */
+  .text-indigo-300 {
+    color: #4338ca !important; /* indigo-700 */
+  }
+  .text-teal-300 {
+    color: #0f766e !important; /* teal-700 */
+  }
+  .text-amber-300 {
+    color: #b45309 !important; /* amber-700 */
+  }
+  .text-purple-300 {
+    color: #7e22ce !important; /* purple-700 */
+  }
+  .text-rose-300 {
+    color: #be123c !important; /* rose-700 */
+  }
+  .text-blue-300 {
+    color: #1d4ed8 !important; /* blue-700 */
+  }
+
+  .bg-indigo-500\/20,
+  .bg-indigo-500\/15 {
+    background-color: rgba(99, 102, 241, 0.12) !important;
+    border-color: rgba(99, 102, 241, 0.25) !important;
+  }
+  .bg-teal-500\/20,
+  .bg-teal-500\/15 {
+    background-color: rgba(20, 184, 166, 0.12) !important;
+    border-color: rgba(20, 184, 166, 0.25) !important;
+  }
+  .bg-amber-500\/20,
+  .bg-amber-500\/15 {
+    background-color: rgba(245, 158, 11, 0.14) !important;
+    border-color: rgba(245, 158, 11, 0.28) !important;
+  }
+  .bg-purple-500\/20,
+  .bg-purple-500\/15 {
+    background-color: rgba(168, 85, 247, 0.12) !important;
+    border-color: rgba(168, 85, 247, 0.25) !important;
+  }
+  .bg-rose-500\/20,
+  .bg-rose-500\/15 {
+    background-color: rgba(244, 63, 94, 0.12) !important;
+    border-color: rgba(244, 63, 94, 0.25) !important;
+  }
+  .bg-blue-500\/20,
+  .bg-blue-500\/15 {
+    background-color: rgba(59, 130, 246, 0.12) !important;
+    border-color: rgba(59, 130, 246, 0.25) !important;
+  }
+
+  /* Explicit White text protection for primary action buttons */
+  button[class*="from-indigo-"],
+  button[class*="from-emerald-"],
+  button[class*="from-teal-"],
+  button[class*="bg-indigo-600"],
+  button[class*="bg-rose-600"],
+  .btn-primary-text {
+    color: #ffffff !important;
+  }
+  button[class*="from-indigo-"] *,
+  button[class*="from-emerald-"] *,
+  button[class*="from-teal-"] *,
+  button[class*="bg-indigo-600"] * {
+    color: #ffffff !important;
+  }
+
+  /* Header blur background */
+  header {
+    background-color: var(--bg-header) !important;
+    border-color: var(--border-card) !important;
+  }
+
+  /* Dropdowns */
+  .ring-white\/10 {
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1) !important;
+  }
+}
+
+/* Google Identity Material Button */
+.gsi-material-button {
+  user-select: none;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-sizing: border-box;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  height: 40px;
+  letter-spacing: 0.2px;
+  outline: none;
+  overflow: hidden;
+  padding: 0 16px;
+  position: relative;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  transition: all 0.2s;
+  align-items: center;
+  backdrop-filter: blur(12px);
+}
+
+.gsi-material-button:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="light"] .gsi-material-button,
+[data-theme="warm"] .gsi-material-button {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .gsi-material-button:hover,
+[data-theme="warm"] .gsi-material-button:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.gsi-material-button-content-wrapper {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  height: 100%;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+}
+
+.gsi-material-button-icon {
+  height: 18px;
+  margin-right: 10px;
+  min-width: 18px;
+  width: 18px;
+}
+
+.gsi-material-button-contents {
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
