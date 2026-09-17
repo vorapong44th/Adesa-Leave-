@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function member() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function inScope(department, owner) {
+      return member() && (owner == request.auth.uid || me().role == 'ceo'
+        || (me().role in ['head_of_dept', 'manager'] && me().department == department));
+    }
+    match /users/{uid} {
+      allow get: if request.auth != null && (uid == request.auth.uid || inScope(resource.data.department, uid));
+      allow list: if inScope(resource.data.department, resource.data.id);
+      allow write: if false;
+      match /notifications/{id} {
+        allow read: if member() && request.auth.uid == uid;
+        allow update: if member() && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+        allow delete: if member() && request.auth.uid == uid;
+        allow create: if false;
+      }
+      match /tokens/{id} { allow read, write: if false; }
+    }
+    match /requests/{id} {
+      allow read: if inScope(resource.data.employeeDepartment, resource.data.employeeId);
+      allow write: if false;
+    }
+    match /settings/workspace {
+      allow read: if member();
+      allow write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
