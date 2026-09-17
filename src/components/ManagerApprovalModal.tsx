@@ -293,8 +293,9 @@ export const ManagerApprovalModal: React.FC<ManagerApprovalModalProps> = ({
               <CalendarIcon className="w-3.5 h-3.5 text-amber-400" />
               <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" />
               <span>
-                Approving will automatically sync to <strong className="text-white">Google Calendar</strong> and append to{' '}
-                <strong className="text-white">Google Sheets</strong>.
+                {request.status === 'Pending' ? 'Approval saves the decision and attempts enabled Google integrations.' : 'This decision is final. Approval controls are disabled.'}
+                {request.sync && <span className="block mt-2">Calendar: {request.sync.calendar.replaceAll('_', ' ')} · Sheets: {request.sync.sheets.replaceAll('_', ' ')}</span>}
+                {request.sync && Object.values(request.sync).some(s => !['synced', 'disabled'].includes(s)) && <span className="block mt-2">Ask your administrator to reconcile the Google record using this request ID. Do not approve again to retry synchronization.</span>}
               </span>
             </div>
           </div>
