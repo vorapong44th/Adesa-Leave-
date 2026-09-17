@@ -1,3 +1,4 @@
+import { canApprove } from '../functions/core.js';
 export type LeaveType =
   | 'Annual Leave'
   | 'Business Leave'
@@ -47,6 +48,7 @@ export interface LeaveBalance {
 
 export interface UserProfile {
   id: string;
+  active?: boolean;
   name: string;
   email: string;
   role: UserRole;
@@ -63,74 +65,12 @@ export interface ApprovalPermission {
   isSelf?: boolean;
 }
 
-/**
- * Validates whether the logged-in user has organizational authority to approve a leave request:
- * - CEO (Zorro, James): Can view all records and approve everyone.
- * - Vorapong (Head of Department): Can approve from BD downward (Onuma, Cherngchao, Sasiwan).
- * - BD Managers (Onuma, Cherngchao): Can review their team requests (e.g., Sasiwan).
- * - Self-approval is strictly forbidden (e.g., Vorapong cannot approve his own leave; requires CEO).
- */
-export function checkApprovalPermission(
-  approver: UserProfile,
-  request: LeaveRequest,
-  applicant?: UserProfile
-): ApprovalPermission {
-  if (approver.id === request.employeeId) {
-    return {
-      canApprove: false,
-      reason: 'Self-approval is not allowed. Your leave request must be approved by your superior or CEO.',
-      isSelf: true,
-    };
-  }
-
-  // CEO rule: "CEO shall be able to see all the record and approval every one"
-  if (approver.role === 'ceo' || approver.title.toUpperCase().includes('CEO')) {
-    return {
-      canApprove: true,
-      reason: 'CEO Executive Authority: Can approve any team member.',
-    };
-  }
-
-  // Vorapong rule: "while Vorapong can approve from BD downward"
-  if (approver.role === 'head_of_dept' || approver.name.toLowerCase().includes('vorapong')) {
-    const isApplicantCeo =
-      applicant?.role === 'ceo' ||
-      applicant?.hierarchyLevel === 100 ||
-      request.employeeTitle.toUpperCase().includes('CEO');
-
-    if (isApplicantCeo) {
-      return {
-        canApprove: false,
-        reason: 'Requires CEO approval. Head of Department has authority from BD downward.',
-      };
-    }
-
-    // BD downward includes BD Managers (level 30) and Executives (level 10)
-    return {
-      canApprove: true,
-      reason: 'Head of Department Authority: Can approve from BD downward.',
-    };
-  }
-
-  // BD Managers (Onuma, Cherngchao)
-  if (approver.role === 'manager') {
-    const applicantLevel = applicant ? applicant.hierarchyLevel : 10;
-    if (applicantLevel < approver.hierarchyLevel) {
-      return {
-        canApprove: true,
-        reason: 'BD Manager Authority: Approving team executive.',
-      };
-    }
-    return {
-      canApprove: false,
-      reason: 'Requires Head of Department (Vorapong) or CEO approval.',
-    };
-  }
-
-  return {
-    canApprove: false,
-    reason: 'Only Department Supervisors and CEOs have approval permissions.',
-  };
+// The server repeats this policy using trusted employee profiles.
+export function checkApprovalPermission(approver: UserProfile, request: LeaveRequest, applicant?: UserProfile): ApprovalPermission {
+  if (request.status !== 'Pending') return { canApprove: false, reason: 'This request is already decided or cancelled.' };
+  if (approver.id === request.employeeId) return { canApprove: false, isSelf: true, reason: 'Self-approval is not allowed.' };
+  const allowed = canApprove(approver, applicant);
+  return { canApprove: allowed, reason: allowed ? 'Authorized approver.' : 'This request requires an authorized superior.' };
 }
 
 export interface LeaveRequest {
@@ -157,6 +97,7 @@ export interface LeaveRequest {
   calendarEventId?: string;
   calendarEventLink?: string;
   sheetRowAppended?: boolean;
+  sync?: { calendar: string; sheets: string };
 }
 
 export interface PushNotification {
